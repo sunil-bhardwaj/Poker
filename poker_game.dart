@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_web_socket/flutter_web_socket.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
   runApp(PokerApp());
@@ -9,7 +9,7 @@ class PokerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Poker Game',
+      title: 'Texas Hold\'em Poker',
       theme: ThemeData.dark(),
       home: PokerTableScreen(),
     );
@@ -22,41 +22,28 @@ class PokerTableScreen extends StatefulWidget {
 }
 
 class _PokerTableScreenState extends State<PokerTableScreen> {
-  late WebSocket _socket;
+  final _channel = WebSocketChannel.connect(Uri.parse('ws://localhost:8000/ws/Player_1'));
   String _gameMessage = "Waiting for players...";
 
-  @override
-  void initState() {
-    super.initState();
-    _connectWebSocket();
-  }
-
-  void _connectWebSocket() {
-    _socket = WebSocket('ws://localhost:8765');
-    _socket.onMessage((message) {
-      setState(() {
-        _gameMessage = message;
-      });
-    });
-  }
-
   void _sendAction(String action, {int? amount}) {
-    Map<String, dynamic> data = {
-      "player_id": "Player_1",
-      "action": action,
-      "amount": amount
-    };
-    _socket.send(data.toString());
+    final data = {"player_id": "Player_1", "action": action, "amount": amount};
+    _channel.sink.add(data.toString());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Texas Hold\'em Poker')),
+      appBar: AppBar(title: Text('Poker Table')),
       body: Stack(
         children: [
-          Positioned.fill(child: Image.asset("assets/poker_table_3d.png", fit: BoxFit.cover)),
-          Center(child: Text(_gameMessage, style: TextStyle(fontSize: 20))),
+          Positioned.fill(child: Image.asset("assets/poker_table.png", fit: BoxFit.cover)),
+          Center(child: StreamBuilder(
+            stream: _channel.stream,
+            builder: (context, snapshot) {
+              if (snapshot.hasData) _gameMessage = snapshot.data.toString();
+              return Text(_gameMessage, style: TextStyle(fontSize: 20));
+            },
+          )),
           Align(
             alignment: Alignment.bottomCenter,
             child: Row(
