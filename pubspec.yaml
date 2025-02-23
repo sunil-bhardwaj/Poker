@@ -1,0 +1,7 @@
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_socket: ^1.0.0  # WebSocket support
+  provider: ^6.0.0  # State management
+  three_dart: ^0.3.1  # 3D rendering for poker table
+  flutter_animate: ^4.2.0  # Card animations
