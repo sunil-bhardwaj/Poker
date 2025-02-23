@@ -1,59 +1,76 @@
 import numpy as np
-import datetime
-from collections import defaultdict
+import time
+import random
 
-class FraudDetection:
+class AIFraudDetection:
     def __init__(self):
-        self.player_stats = defaultdict(lambda: {"total_bets": 0, "wins": 0, "losses": 0, "suspicious_transfers": 0})
-        self.bet_timestamps = defaultdict(list)
+        """
+        Initializes the fraud detection system with thresholds.
+        - Chip Dumping: Detects players intentionally losing to another player.
+        - Collusion: Detects players sharing hole card information.
+        - Bot Behavior: Identifies unnatural or instant decisions.
+        """
+        self.chip_dump_threshold = 0.8  # If one player wins >80% from another, flag it
+        self.collusion_threshold = 0.75  # If players fold together >75%, flag it
+        self.bot_reaction_threshold = 0.5  # If reaction times are too consistent, flag it
 
-    def track_bet(self, player_id, amount, timestamp=None):
-        """Track bets to detect suspicious patterns."""
-        timestamp = timestamp or datetime.datetime.now()
-        self.bet_timestamps[player_id].append(timestamp)
-        self.player_stats[player_id]["total_bets"] += amount
+        self.player_wins = {}  # Track how often one player wins against another
+        self.fold_patterns = {}  # Track simultaneous folds
+        self.reaction_times = {}  # Track average reaction time per player
 
-    def track_win_loss(self, player_id, won=True):
-        """Track win/loss ratios to detect chip dumping."""
-        if won:
-            self.player_stats[player_id]["wins"] += 1
-        else:
-            self.player_stats[player_id]["losses"] += 1
+    def detect_chip_dumping(self, game_history):
+        """
+        Detects chip dumping by analyzing win percentages between players.
+        """
+        for game in game_history:
+            winner, loser, amount = game  # (winner_id, loser_id, chip_amount)
+            if loser not in self.player_wins:
+                self.player_wins[loser] = {}
 
-    def detect_chip_dumping(self, player_id):
-        """Detects if a player is intentionally losing to another."""
-        losses = self.player_stats[player_id]["losses"]
-        bets = self.player_stats[player_id]["total_bets"]
-        if losses > 10 and bets > 1000 and (losses / bets) > 0.8:
-            return f"🚨 Player {player_id} is suspected of chip dumping!"
-        return None
+            self.player_wins[loser][winner] = self.player_wins[loser].get(winner, 0) + 1
 
-    def detect_collusion(self, player1, player2):
-        """Detects if two players are frequently betting against each other in a suspicious way."""
-        timestamps1 = np.array([t.timestamp() for t in self.bet_timestamps[player1]])
-        timestamps2 = np.array([t.timestamp() for t in self.bet_timestamps[player2]])
-        if len(timestamps1) > 5 and len(timestamps2) > 5:
-            time_diff = np.abs(timestamps1[:, None] - timestamps2)
-            if (time_diff < 2).sum() > 5:  # If 5+ bets happen within 2 seconds
-                return f"🚨 Players {player1} and {player2} might be colluding!"
-        return None
+        for loser, winners in self.player_wins.items():
+            for winner, count in winners.items():
+                total_matches = sum(winners.values())
+                win_ratio = count / total_matches
+                if win_ratio > self.chip_dump_threshold:
+                    print(f"🚨 Possible chip dumping detected: {winner} wins {win_ratio*100:.2f}% from {loser}!")
 
-    def detect_bot_behavior(self, player_id):
-        """Detects if a player is acting like a bot (predictable, repetitive play)."""
-        timestamps = np.array([t.timestamp() for t in self.bet_timestamps[player_id]])
-        if len(timestamps) > 10:
-            avg_time_between_bets = np.mean(np.diff(timestamps))
-            if avg_time_between_bets < 1.5:  # If player is betting too fast
-                return f"🚨 Player {player_id} is playing like a bot!"
-        return None
+    def detect_collusion(self, fold_history):
+        """
+        Detects collusion by checking if two players frequently fold together.
+        """
+        for hand in fold_history:
+            players_folded = tuple(sorted(hand))  # (player1, player2, ...)
+            self.fold_patterns[players_folded] = self.fold_patterns.get(players_folded, 0) + 1
+
+        for pair, count in self.fold_patterns.items():
+            total_hands = sum(self.fold_patterns.values())
+            collusion_ratio = count / total_hands
+            if collusion_ratio > self.collusion_threshold:
+                print(f"🚨 Possible collusion detected: {pair} fold together {collusion_ratio*100:.2f}% of the time!")
+
+    def detect_bot_behavior(self, reaction_times):
+        """
+        Detects bots based on consistent reaction times.
+        """
+        for player, times in reaction_times.items():
+            avg_time = np.mean(times)
+            std_dev = np.std(times)
+            if std_dev < self.bot_reaction_threshold:
+                print(f"🚨 Possible bot detected: {player} has reaction times too consistent (Avg: {avg_time:.2f}s)")
 
 # Example Usage:
-fraud_detector = FraudDetection()
-fraud_detector.track_bet("player1", 100)
-fraud_detector.track_win_loss("player1", won=False)
-fraud_detector.track_bet("player2", 200)
-fraud_detector.track_win_loss("player2", won=True)
+fraud_detector = AIFraudDetection()
 
-print(fraud_detector.detect_chip_dumping("player1"))
-print(fraud_detector.detect_collusion("player1", "player2"))
-print(fraud_detector.detect_bot_behavior("player1"))
+# Simulated chip dumping scenario
+game_history = [("Player_1", "Player_2", 500), ("Player_1", "Player_2", 700), ("Player_1", "Player_2", 800)]
+fraud_detector.detect_chip_dumping(game_history)
+
+# Simulated collusion scenario
+fold_history = [("Player_3", "Player_4"), ("Player_3", "Player_4"), ("Player_3", "Player_4")]
+fraud_detector.detect_collusion(fold_history)
+
+# Simulated bot behavior scenario
+reaction_times = {"Player_5": [0.99, 1.01, 1.02, 1.00, 0.98], "Player_6": [1.5, 2.1, 1.8, 1.4]}
+fraud_detector.detect_bot_behavior(reaction_times)
